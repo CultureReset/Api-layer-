@@ -2,8 +2,15 @@ const express = require('express');
 const db = require('../config/db');
 const asyncHandler = require('../utils/asyncHandler');
 const { attachSectionContent } = require('../utils/sections');
+const bookingsRouter = require('./bookings');
+const songRequestsRouter = require('./song-requests');
+const toolsRouter = require('./tools');
 
 const router = express.Router();
+
+router.use('/:slug/bookings', bookingsRouter);
+router.use('/:slug/song-requests', songRequestsRouter);
+router.use('/:slug/tools', toolsRouter);
 
 const LIST_COLUMNS =
   'id, slug, name, subtitle, entity_type, entity_subtype, city, state, ' +
@@ -51,7 +58,7 @@ router.get(
       return res.status(404).json({ error: 'Entity not found' });
     }
 
-    const [hours, photos, tags, features, perfectFor, events, specials, sections] = await Promise.all([
+    const [hours, photos, tags, features, perfectFor, events, specials, sections, tools] = await Promise.all([
       db.from('entity_hours').select('*').eq('entity_id', entity.id).order('day_of_week', { ascending: true }),
       db.from('entity_photos').select('*').eq('entity_id', entity.id).order('sort_order', { ascending: true }),
       db.from('entity_tags').select('*').eq('entity_id', entity.id).order('sort_order', { ascending: true }),
@@ -64,10 +71,21 @@ router.get(
         .eq('is_active', true)
         .order('event_date', { ascending: true }),
       db.from('entity_specials').select('*').eq('entity_id', entity.id).eq('is_active', true),
-      db.from('entity_sections').select('*').eq('entity_id', entity.id).order('sort_order', { ascending: true }),
+      db
+        .from('entity_sections')
+        .select('*')
+        .eq('entity_id', entity.id)
+        .eq('visible', true)
+        .order('sort_order', { ascending: true }),
+      db
+        .from('entity_tools')
+        .select('*')
+        .eq('entity_id', entity.id)
+        .eq('enabled', true)
+        .order('sort_order', { ascending: true }),
     ]);
 
-    for (const [name, result] of Object.entries({ hours, photos, tags, features, perfectFor, events, specials, sections })) {
+    for (const [name, result] of Object.entries({ hours, photos, tags, features, perfectFor, events, specials, sections, tools })) {
       if (result.error) throw Object.assign(result.error, { message: `Failed loading ${name}: ${result.error.message}` });
     }
 
@@ -81,6 +99,7 @@ router.get(
       events: events.data,
       specials: specials.data,
       sections: await attachSectionContent(sections.data),
+      tools: tools.data,
     });
   })
 );
